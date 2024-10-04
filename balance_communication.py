@@ -2,30 +2,39 @@ import serial
 import threading
 from time import sleep
 
-class Serial(serial.Serial): 
-    def __init__(self) -> None:
-        self.set_port()
-        self.set_baudrate()
+class Serial(serial.Serial):
+    running: bool
+    weight: float
+    baud_rate: int
+    port: str
+    timeout: int
+    stable: bool
+    
+    def __init__(self):
+        super(Serial, self).__init__()
+        
+        self.set_baud_rate()
         self.set_timeout()
+
         self.running = True
         self.weight = None
         self.thread = threading.Thread(target=self.read_serial)
 
-    def set_port(self, port: str ="COM3") -> None:
+    def set_port(self, port):
         self.port: str = port
 
-    def set_baudrate(self, baudrate: int = 9600) -> None:
-        self.baudrate = baudrate
-    
-    def set_timeout(self, timeout: int = 0.01) -> None:
-        self.timeout = timeout
+    def set_baud_rate(self, rate=9600):
+        self.baud_rate: int = rate
+
+    def set_timeout(self, timeout=0.01):
+        self.timeout: int = timeout
 
     def connect(self) -> str:
         try:
             # Abrindo a conexão serial
-            self.serial = super(Serial, self).__init__(port=self.port, baudrate=self.baudrate, timeout=self.timeout)
-            self.thread.start()
+            self.serial = serial.Serial(self.port, self.baud_rate, timeout=self.timeout)
             sleep(0.5)
+            self.thread.start()
             return f"Conectado a porta {self.port} com sucesso:"
 
         except serial.SerialException as e:
@@ -47,12 +56,13 @@ class Serial(serial.Serial):
 
                 self.serial.reset_input_buffer()
 
-    def get_weight(self) -> float:
+    def get_weight(self):
         return self.weight
 
-    def stop(self) -> None:
+    def stop(self):
         self.running = False
-        if self.is_open:
-             super().close()  # Fecha a porta serial
-        if self.thread.is_alive():
-            self.thread.join()  # Aguarda o término da thread
+        self.serial.close()
+        self.thread.join()
+    
+    def close(self):
+        self.serial.close()
