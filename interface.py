@@ -19,7 +19,7 @@ class Interface:
     self.master.mainloop()
 
   def on_closing(self) -> None:
-    if self.serial_com.is_open():
+    if self.serial_com.is_open:
       self.serial_com.stop()
     self.master.destroy()
 
