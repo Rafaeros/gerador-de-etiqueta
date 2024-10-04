@@ -1,20 +1,7 @@
 # Tamanho da etiqueta: ETIQUETA ADESIVA BOPP PEROLADO 100 x 150mm - COUCHE PERSONALIZADA 250 UNID.
-
-from reportlab.lib.pagesizes import landscape, letter
-from reportlab.lib.units import mm, inch
-from reportlab.lib.styles import getSampleStyleSheet
-
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-
-from reportlab.graphics.barcode import code128
-from reportlab.graphics.barcode import code93
-from reportlab.graphics.barcode import code39
-from reportlab.graphics.barcode import usps
-from reportlab.graphics.barcode import usps4s
-from reportlab.graphics.barcode import ecc200datamatrix
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-
+from PIL import Image, ImageDraw, ImageFont
+from barcode import Code128
+from barcode.writer import ImageWriter
 from win32 import win32print, win32api
 import os
 
@@ -22,133 +9,94 @@ class LabelPrint():
   def __init__(self, LabelInfo) -> None:
     self.label_info = LabelInfo
 
-  def get_string_width(self, text, font_name, font_size):
-    return pdfmetrics.stringWidth(text, font_name, font_size)
-  # Função, para adaptar o texto a comprimento e largura do pdf.
-  def draw_text(self, canvas, text, x, y, max_width, initial_font_size, font_name="Helvetica"):
-    font_size = initial_font_size
-    text_width = self.get_string_width(text, font_name, font_size)
+  def mm_to_px(self, mm, DPI=300) -> int:
+    return int(mm * (DPI / 25.4))
+
+  def wrap_text(self, text: str) -> str:
+    # Inicializa variáveis
+    MAX_CHARS: int = 50
+    words: list[str] = text.split(' ')
+    lines: list[str] = []
+    current_line: str = ""
+
+    for word in words:
+      if len(current_line) + len(word) + 1 > MAX_CHARS:
+          lines.append(current_line) 
+          current_line = word
+      else:
+        if current_line:
+            current_line += ' ' + word
+        else:
+            current_line = word  
+
+    if current_line:
+      lines.append(current_line)
     
-    while text_width > max_width and font_size > 1:
-        font_size -= 1
-        text_width = self.get_string_width(text, font_name, font_size)
-    
-    canvas.setFont(font_name, font_size)
-    canvas.drawString(x, y, text)
-  
-  def draw_text_break(self, canvas, text, x, y, max_width, font_size, font_name="Helvetica"):
-    doc = SimpleDocTemplate("temp.pdf", pagesize=letter)
-    
-    # Configurar o estilo do parágrafo
-    styles = getSampleStyleSheet()
-    style = styles["Normal"]
-    style.fontName = font_name
-    style.fontSize = font_size
-    style.leading = font_size * 1
+    wrapped_text: str = '\n'.join(lines)
 
-    # Criar o parágrafo com quebra de linha automática
+    return wrapped_text
 
-    paragraph = Paragraph(text, style)
+  def description_barcode(self, text) -> None:
+    barcode: Code128 = Code128(text, writer=ImageWriter())
+    barcode.save("description_barcode", options={"module_width": 0.2, "module_height": 10, "quiet_zone": 1, "font_path": "FiraCode-Regular.ttf", "font_size": 10})
 
-    # Construir o parágrafo no documento temporário
-    doc.build([paragraph])
-
-    # Desenhar o parágrafo no canvas
-    canvas.saveState()
-    canvas.translate(x, y)
-    paragraph.wrapOn(canvas, max_width, 500)
-    paragraph.drawOn(canvas, 0, 0)
-    canvas.restoreState()
-
-  def draw_desc_barcode(self, canvas, barcode_value, x, y, max_width):
-    barcode = code128.Code128(barcode_value, barWidth=0.5*mm, barHeight=15*mm, humanReadable=True, fontSize=10, fontName="Helvetica")
-    barcode_width = barcode.width
-
-    scale = max_width / barcode_width
-    # Desenha o código de barras com a escala calculada
-    canvas.saveState()
-    canvas.scale(scale, 1)
-    barcode.drawOn(canvas, x / scale, y)  # Ajusta a posição para considerar a escala
-    canvas.restoreState()
-
-  def draw_qtd_barcode(self, canvas, barcode_value, x, y, max_width, barHeight):
-    barcode = code128.Code128(barcode_value, barWidth=0.5*mm, barHeight=barHeight, humanReadable=True, fontSize=10, fontName="Helvetica")
-    barcode_width = barcode.width
-
-    scale = max_width / barcode_width
-    # Desenha o código de barras com a escala calculada
-    canvas.saveState()
-    canvas.scale(scale, 1)
-    barcode.drawOn(canvas, x / scale, y)  # Ajusta a posição para considerar a escala
-    canvas.restoreState()
+  def quantity_barcode(self, text) -> None:
+    barcode: Code128 = Code128(text, writer=ImageWriter())
+    barcode.save("quantity_barcode", options={"module_width": 0.3, "module_height": 5, "quiet_zone": 1, "font_path": "FiraCode-Regular.ttf", "font_size": 10})
 
   def create_label(self) -> None:
-    # Dimensões da etiqueta
-    width = 150*mm
-    height = 100*mm
+    WIDTH: int = self.mm_to_px(150)
+    HEIGHT: int = self.mm_to_px(100)
+    FONT_NAME: str = "FiraCode-Regular.ttf"
 
-    margin_left = 5*mm
-    max_width = 140*mm
+    # Posições dos elementos da etiqueta (label)
+    positions: dict[str, int] = {
+      'date': (self.mm_to_px(10), self.mm_to_px(15)),
+      'boxes': (self.mm_to_px(80), self.mm_to_px(15)),
+      'line': (self.mm_to_px(0), self.mm_to_px(20), self.mm_to_px(150), self.mm_to_px(20)),
+      'client': (self.mm_to_px(5), self.mm_to_px(25)),
+      'code': (self.mm_to_px(5), self.mm_to_px(35)),
+      'description': (self.mm_to_px(5), self.mm_to_px(45)),
+      'barcode': (self.mm_to_px(5), self.mm_to_px(65)),
+      'quantity': (self.mm_to_px(5), self.mm_to_px(90)),
+      'quantity_barcode': (self.mm_to_px(70), self.mm_to_px(88)),
+      'weight': (self.mm_to_px(120), self.mm_to_px(90))
+      }
 
-    # Posição dos elementos
-    # Data
-    date_x, date_y = 10*mm, height-25*mm
+    # Criar imagem em branco (label)
+    label: Image = Image.new('RGB', (WIDTH, HEIGHT), color='white')
+    font: ImageFont = ImageFont.truetype(FONT_NAME, size=50)
+    # Criar objeto para desenhar na imagem
+    draw: ImageDraw.Draw = ImageDraw.Draw(label)
 
-    # Lote das caixas
-    boxes_x, boxes_y = 50*mm, height-25*mm
+    client: str = self.wrap_text(self.label_info.client)
+    description: str = self.wrap_text(self.label_info.description)
+    self.description_barcode(self.label_info.barcode)
+    self.quantity_barcode(str(self.label_info.quantity))
 
-    # Linha horizontal
-    line_x1, line_y1, line_x2, line_y2 = 0, height-30*mm, width, height-30*mm
-    # Cliente
-    client_x, client_y = margin_left, height-40*mm
-    # Código
-    code_x, code_y = margin_left, height-50*mm
-    # Descrição
-    description_x, description_y = margin_left, height-62*mm
-    # Código de barras descrição.
-    desc_barcode_x, desc_barcode_y = 0, height-80*mm
-    # Quantidade
-    qtd_x, qtd_y = margin_left, height-95*mm
-    # Código de barras quantidade.
-    qtd_barcode_x, qtd_barcode_y = 60*mm, height-95*mm
+    draw.text(positions.get('date'), f'Data: {self.label_info.date}', fill='black', font=font)
+    draw.text(positions.get('boxes'), str(self.label_info.boxes), fill='black', font=font)
+    draw.line(positions.get('line'), fill='black', width=3)
+    draw.text(positions.get('client'), f"CLIENTE: {client}",fill='black', font=font)
+    draw.text(positions.get('code'), f"CÓDIGO: {self.label_info.code}", fill='black', font=font)
+    draw.text(positions.get('description'), f"DESCRIÇÃO: {description}", fill='black', font=font)
 
-    weight_x, weight_y = 120*mm, height-95*mm
+    # Codigo de barras da descrição
+    description_barcode = Image.open('description_barcode.png')
+    label.paste(description_barcode, positions.get('barcode'))
 
-    pdf = canvas.Canvas(f"etq.pdf", pagesize=landscape((width,height)))
-    #Inserindo elementos
-    # Data
-    self.draw_text(pdf, f"{self.label_info.date}", date_x, date_y, max_width, 12)
+    draw.text(positions.get('quantity'), f"QUANTIDADE: {str(self.label_info.quantity)} UND", fill='black', font=font)
 
-    # Lote das caixas
-    self.draw_text(pdf, f"{self.label_info.boxes}", boxes_x, boxes_y, max_width, 12)
+    # Codig de barras da quantidade
+    quantity_barcode = Image.open('quantity_barcode.png')
+    label.paste(quantity_barcode, positions.get('quantity_barcode'))
 
-    # Linha Divisória
-    pdf.line(line_x1, line_y1, line_x2, line_y2)
+    draw.text(positions.get('weight'), f"{self.label_info.weight} KG", fill='black', font=font)
 
-    # Cliente
-    self.draw_text(pdf, f"CLIENTE: {self.label_info.client}", client_x, client_y, max_width, 18)
+    label.thumbnail((WIDTH, HEIGHT))
+    label.save('etq.png')
 
-    # Código
-    self.draw_text(pdf, f"CÓDIGO: {self.label_info.code}", code_x, code_y, max_width, 20)
-
-    # Descrição
-    self.draw_text_break(pdf, f"DESCRIÇÃO: {str(self.label_info.description)}", description_x, description_y, max_width, 12)
-
-    # Código de Barras
-    self.draw_desc_barcode(pdf, f"{self.label_info.set_barcode_data()}", desc_barcode_x, desc_barcode_y, max_width)
-
-    # Quantidade
-    self.draw_text(pdf, f"QUANTIDADE: {self.label_info.quantity} UND", qtd_x, qtd_y, max_width, 11)
-
-    # Codigo de barras quantidade
-    self.draw_qtd_barcode(pdf, f"{self.label_info.quantity}", qtd_barcode_x, qtd_barcode_y, 40*mm, 10*mm)
-
-    # Peso
-    self.draw_text(pdf, f"{self.label_info.weight} KG", weight_x, weight_y, 145*mm, 12)
-
-    pdf.save()
-
-  def print_label(self, file_path: str = './etq.pdf') -> None:
+  def print_label(self, file_path: str = './etq.png') -> None:
     abs_file_path: str = os.path.abspath(file_path)
     
     # Configuração impressora
