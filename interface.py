@@ -3,6 +3,7 @@ from CTkMessagebox import CTkMessagebox as ctkmsg
 from get_data import LabelData, LabelInfo
 from label_print import LabelPrint
 from balance_communication import Serial
+import webbrowser as web
 import time
 
 class Interface:
@@ -80,6 +81,7 @@ class Interface:
     self.box_input = ctk.CTkEntry(self.master, placeholder_text="N° de caixas:")
 
     self.print_button = ctk.CTkButton(self.master, text="Imprimir", command=self.print_label, width=150, height=50, corner_radius=10)
+    self.author = ctk.CTkLabel(self.master, text="Feito por: Rafael Costa", text_color="#0000EE")
 
     padding = {'padx': 5, 'pady': 10}
 
@@ -113,6 +115,11 @@ class Interface:
     self.weight_input.grid(row=7, column=4)
 
     self.print_button.grid(row=10, column=2, columnspan=3, pady=20)
+    self.author.grid(row=11, column=4, **padding)
+    self.author.bind("<Button-1>", lambda o: self.author_callback())
+
+  def author_callback(self):
+    web.open_new("https://www.linkedin.com/in/rafaeros/")
 
   def serial_port_callback(self, choice: str) -> None:
     self.serial_com.set_port(choice)
