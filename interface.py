@@ -178,6 +178,7 @@ class Interface:
     self.box_input.delete(0, ctk.END)
 
   def print_label(self) -> None:
+    
     if self.code_input.get() == "":
       ctkmsg(self.master, title="Aviso", message="Insira alguma OP para imprimir", icon='warning', option_1="OK")
       return
@@ -193,8 +194,8 @@ class Interface:
         return
       
       try:
-        for _ in range(int(self.box_input.get())):
-          boxes = f"{_+1}/{self.box_input.get()}"
+        for i in range(int(self.box_input.get())):
+          boxes = f"{i+1}/{self.box_input.get()}"
           label = LabelPrint(LabelInfo(self.client_input.get(), self.code_input.get(), self.description_input.get(), self.lot_quantity, boxes, self.weight_input.get()))
           label.create_label()
           time.sleep(0.5)
