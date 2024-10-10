@@ -44,12 +44,12 @@ class Interface:
     self.box_var = ctk.IntVar()
     self.manual_weight_var = ctk.StringVar(value="on")
     self.lot_quantity = ''
-    self.id= ''
+    self.op= ''
 
   def create_window(self) -> None:
-    self.id_label = ctk.CTkLabel(self.master, text="Número da OP:")
-    self.id_input = ctk.CTkEntry(self.master, placeholder_text="Digite o número da OP")
-    self.id_input.bind('<Return>', self.search_id)
+    self.op_label = ctk.CTkLabel(self.master, text="Número da OP:")
+    self.op_input = ctk.CTkEntry(self.master, placeholder_text="Digite o número da OP")
+    self.op_input.bind('<Return>', self.search_id)
 
     self.search_button = ctk.CTkButton(self.master, text="Buscar", command=self.search_id, height=35, corner_radius=10)
     self.clear_inputs_button = ctk.CTkButton(self.master, text="Limpar", command=self.clear_inputs, fg_color='red', height=35, corner_radius=10)
@@ -85,8 +85,8 @@ class Interface:
 
     padding = {'padx': 5, 'pady': 10}
 
-    self.id_label.grid(row=0,column=1, **padding)
-    self.id_input.grid(row=0, column=2, **padding)
+    self.op_label.grid(row=0,column=1, **padding)
+    self.op_input.grid(row=0, column=2, **padding)
     self.search_button.grid(row=0, column=3, **padding)
     self.clear_inputs_button.grid(row=1, column=3, **padding)
 
@@ -130,14 +130,14 @@ class Interface:
     print("Manual weight chekbox value: ", self.manual_weight_var.get())
 
   def search_id(self, event=None) -> None:
-    self.id = f"OP-{self.id_input.get().zfill(7)}"
+    self.op = f"OP-{self.op_input.get().zfill(7)}"
     
-    if not (self.label_data_df['Código'] == self.id).any():
-      ctkmsg(title="Não encontrado", message=f"Valor: {self.id} não foi encontrado", option_1="OK", icon="warning")
+    if not (self.label_data_df['Código'] == self.op).any():
+      ctkmsg(title="Não encontrado", message=f"Valor: {self.op} não foi encontrado", option_1="OK", icon="warning")
       return
       
     try:
-      info = self.label_data.get_data(self.id, 1, "")
+      info = self.label_data.get_data(self.op, 1, "")
       self.client_var.set(info.client)
       self.code_var.set(info.code)
       self.description_var.set(info.description)
@@ -168,7 +168,7 @@ class Interface:
       ctkmsg(title="Erro", message=e ,option_1="OK", icon='cancel')
     
   def clear_inputs(self, event=None) -> None:
-    self.id_input.delete(0, ctk.END)
+    self.op_input.delete(0, ctk.END)
     self.client_input.delete(0, ctk.END)
     self.code_input.delete(0, ctk.END)
     self.description_input.delete(0, ctk.END)
@@ -196,10 +196,18 @@ class Interface:
       try:
         for i in range(int(self.box_input.get())):
           boxes = f"{i+1}/{self.box_input.get()}"
-          label = LabelPrint(LabelInfo(self.client_input.get(), self.code_input.get(), self.description_input.get(), self.lot_quantity, boxes, self.weight_input.get()))
-          label.create_label()
-          time.sleep(0.5)
-          label.print_label()
+          label_info: LabelInfo = LabelInfo(self.op_input.get(), self.client_input.get(), self.code_input.get(), self.description_input.get(), self.lot_quantity, boxes, self.weight_input.get())
+          label: LabelPrint = LabelPrint(label_info)
+
+          if label_info.code.startswith("MWM"):
+            label.label_info.boxes = i+1
+            label.create_mwm_label()
+            time.sleep(0.5)
+            label.print_label()
+          else:
+            label.create_label()
+            time.sleep(0.5)
+            label.print_label()
 
       except Exception as e:
         ctkmsg(self.master, message=f"Erro ao imprimir: {e}", title="Erro", icon="cancel", option_1="OK")
