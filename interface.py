@@ -9,7 +9,7 @@ import time
 class Interface:
   def __init__(self) -> None:
     self.master = ctk.CTk()
-    self.master.geometry("800x600")
+    self.master.geometry("800x500")
     self.master.resizable(False, False)
     self.master.title("Gerador De Etiquetas")
     self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -47,76 +47,75 @@ class Interface:
     self.op= ''
 
   def create_window(self) -> None:
-    self.op_label = ctk.CTkLabel(self.master, text="Número da OP:")
-    self.op_input = ctk.CTkEntry(self.master, placeholder_text="Digite o número da OP")
-    self.op_input.bind('<Return>', self.search_id)
+    PADDING: dict = {
+      'padx': 5,
+      'pady': 10
+    }
 
-    self.search_button = ctk.CTkButton(self.master, text="Buscar", command=self.search_id, height=35, corner_radius=10)
-    self.clear_inputs_button = ctk.CTkButton(self.master, text="Limpar", command=self.clear_inputs, fg_color='red', height=35, corner_radius=10)
-    self.clear_inputs_button.bind('<Delete>', self.clear_inputs)
+    labels = [
+      {'label_name': 'op_label', 'label_text': 'Número da OP:', 'row': 0, 'column': 1, 'padding': PADDING},
+      {'label_name': 'code_label', 'label_text': 'Código:', 'row': 1, 'column': 1, 'padding': PADDING},
+      {'label_name': 'client_label', 'label_text': 'Cliente:', 'row': 2, 'column': 1, 'padding': PADDING},
+      {'label_name': 'description_label', 'label_text': 'Descrição:', 'row': 4, 'column': 1, 'padding': PADDING},
+      {'label_name': 'barcode_label', 'label_text': 'Código de barras:', 'row': 6, 'column': 1, 'padding': PADDING},
+      {'label_name': 'quantity_label', 'label_text': 'Quantidade Total:', 'row': 7, 'column': 1, 'padding': PADDING},
+      {'label_name': 'box_label', 'label_text': 'Caixas:', 'row': 6, 'column': 3, 'padding': PADDING},
+      {'label_name': 'weight_label', 'label_text': 'Peso (Kg):', 'row': 7, 'column': 3, 'padding': PADDING},
+      {'label_name': 'author', 'label_text': 'Autor: Rafael Costa', 'row': 11, 'column': 4, 'padding': PADDING, 'bind': ('<Button-1>', lambda event: self.author_callback())},
+    ]
 
-    self.serial_com_port_menu = ctk.CTkOptionMenu(self.master, values=["COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7"], command=self.serial_port_callback)
+    inputs = [
+      {'input_name': 'op_input', 'place_holder': 'Insira o número da OP', 'width': 300, 'height': 28, 'row': 0, 'column': 2, 'columnspan': 1, 'bind': ('<Return>', self.search_id)},
+      {'input_name': 'code_input', 'place_holder': 'Insira o código do produto', 'width': 300, 'height': 35, 'row': 1, 'column': 2, 'columnspan': 1, 'padding': PADDING},
+      {'input_name': 'client_input', 'place_holder': 'Insira o nome do cliente', 'width': 550, 'height': 35, 'row': 2, 'column': 2, 'columnspan': 3, 'padding': PADDING},
+      {'input_name': 'description_input', 'place_holder': 'Insira a descrição do produto', 'width': 550, 'height': 35, 'row': 4, 'column': 2, 'columnspan': 3, 'padding': PADDING},
+      {'input_name': 'barcode_input', 'place_holder': 'Insira o código de barras', 'width': 300, 'height': 35, 'row': 6, 'column': 2, 'columnspan': 1,  'padding': PADDING},
+      {'input_name': 'quantity_input', 'place_holder': 'Insira a quantidade total', 'width': 300, 'height': 35, 'row': 7, 'column': 2, 'columnspan': 1},
+      {'input_name': 'box_input', 'place_holder': 'Insira o número de caixas', 'width': 140, 'height': 28, 'row': 6, 'column': 4, 'columnspan': 1},
+      {'input_name': 'weight_input', 'place_holder': 'Insira o peso', 'width': 140, 'height': 28, 'row': 7, 'column': 4, 'columnspan': 1},
+    ]
 
-    self.client_label = ctk.CTkLabel(self.master, text="Cliente:")
-    self.client_input = ctk.CTkEntry(self.master, placeholder_text="Cliente do Produto", width=550, height=35)
+    buttons = [
+      {'button_name': 'search_button', 'button_text': 'Buscar', 'width': 140, 'height': 35, 'row': 0, 'column': 3, 'columnspan': 1, 'corner_radius': 10, 'padding': PADDING, 'command': self.search_id, 'bind': ('<Return>', self.search_id)},
+      {'button_name': 'clear_inputs_button', 'button_text': 'Limpar', 'width': 140, 'height': 35, 'row': 1, 'column': 3, 'columnspan': 1, 'corner_radius': 10, 'padding': PADDING, 'command': self.clear_inputs, 'bind': ('<Return>', self.clear_inputs), 'fg_color': 'red'},
+      {'button_name': 'print_button', 'button_text': 'Imprimir', 'width': 150, 'height': 50, 'row': 10, 'column': 2, 'columnspan': 3, 'corner_radius': 10, 'pady': 20, 'command': self.print_label}
+    ]
 
-    self.code_label = ctk.CTkLabel(self.master, text="Código:")
-    self.code_input = ctk.CTkEntry(self.master, placeholder_text="Código do Produto", width=300, height=35)
+    # Instanciando as labels, inputs e buttons e configurando grids
+    for ctk_label in labels:
+      setattr(self, ctk_label['label_name'], ctk.CTkLabel(self.master, text=ctk_label['label_text']))
 
-    self.description_label = ctk.CTkLabel(self.master, text="Descrição:")
-    self.description_input = ctk.CTkEntry(self.master, placeholder_text="Descrição do Produto", width=550, height=35)
+      if 'bind' in ctk_label:
+        getattr(self, ctk_label['label_name']).configure(text_color='#0000EE')
+        getattr(self, ctk_label['label_name']).bind(ctk_label['bind'][0], ctk_label['bind'][1])
 
-    self.barcode_label = ctk.CTkLabel(self.master, text="Código de barras:")
-    self.barcode_input = ctk.CTkEntry(self.master, placeholder_text="Código de barras do Produto", width=300, height=35)
+      getattr(self, ctk_label['label_name']).grid(row=ctk_label['row'], column=ctk_label['column'], **ctk_label['padding'])
 
-    self.quantity_label = ctk.CTkLabel(self.master, text="Quantidade Total:")
-    self.quantity_input = ctk.CTkEntry(self.master, placeholder_text="Quantidade Total", width=200, height=35)
+    for ctk_input in inputs:
+      setattr(self, ctk_input['input_name'], ctk.CTkEntry(self.master, placeholder_text=ctk_input['place_holder'], width=ctk_input['width'], height=ctk_input['height']))          
+      if 'bind' in ctk_input:
+        getattr(self, ctk_input['input_name']).bind(ctk_input['bind'][0], ctk_input['bind'][1])
+      
+      if 'padding' in ctk_input:
+        getattr(self, ctk_input['input_name']).grid(row=ctk_input['row'], column=ctk_input['column'], columnspan=ctk_input['columnspan'], **ctk_input['padding'])
+      
+      getattr(self, ctk_input['input_name']).grid(row=ctk_input['row'], column=ctk_input['column'], columnspan=ctk_input['columnspan'])
 
-    self.manual_weight_checkbox = ctk.CTkCheckBox(self.master, text="Inserir Peso Manualmente", onvalue="on", offvalue="off", variable=self.manual_weight_var, command=self.manual_weight_callback)
+    for ctk_button in buttons:
+      setattr(self, ctk_button['button_name'], ctk.CTkButton(self.master, text=ctk_button['button_text'], width=ctk_button['width'], height=ctk_button['height'], corner_radius=ctk_button['corner_radius'], command=ctk_button['command']))
+      if 'fg_color' in ctk_button:
+        getattr(self, ctk_button['button_name']).configure(fg_color=ctk_button['fg_color'])
+      
+      if 'bind' in ctk_button:
+        getattr(self, ctk_button['button_name']).bind(ctk_button['bind'][0], ctk_button['bind'][1])
 
-    self.weight_label = ctk.CTkLabel(self.master, text="Peso: ")
-    self.weight_input = ctk.CTkEntry(self.master, placeholder_text="Peso: 0,00 Kg")
+      if not 'pady' in ctk_button:
+        getattr(self, ctk_button['button_name']).grid(row=ctk_button['row'], column=ctk_button['column'], columnspan=ctk_button['columnspan'], **ctk_button['padding'])
+      else:
+        getattr(self, ctk_button['button_name']).grid(row=ctk_button['row'], column=ctk_button['column'], columnspan=ctk_button['columnspan'], pady=ctk_button['pady'])
 
-    self.box_label = ctk.CTkLabel(self.master, text="Insira a quantidade de caixas:")
-    self.box_input = ctk.CTkEntry(self.master, placeholder_text="N° de caixas:")
-
-    self.print_button = ctk.CTkButton(self.master, text="Imprimir", command=self.print_label, width=150, height=50, corner_radius=10)
-    self.author = ctk.CTkLabel(self.master, text="Feito por: Rafael Costa", text_color="#0000EE")
-
-    padding = {'padx': 5, 'pady': 10}
-
-    self.op_label.grid(row=0,column=1, **padding)
-    self.op_input.grid(row=0, column=2, **padding)
-    self.search_button.grid(row=0, column=3, **padding)
-    self.clear_inputs_button.grid(row=1, column=3, **padding)
-
-    self.serial_com_port_menu.grid(row=0, column=4, **padding)
-
-    self.code_label.grid(row=1, column=1, **padding)
-    self.code_input.grid(row=1,column=2, **padding)
-
-    self.client_label.grid(row=2, column=1, **padding)
-    self.client_input.grid(row=3, column=1, columnspan=4, **padding)
-    
-    self.description_label.grid(row=4, column=1, **padding)
-    self.description_input.grid(row=5, column=1, columnspan=4, **padding)
-
-    self.barcode_label.grid(row=6, column=1, **padding)
-    self.barcode_input.grid(row=6, column=2, **padding)
-
-    self.box_label.grid(row=6, column=3)
-    self.box_input.grid(row=6, column=4)
-
-    self.quantity_label.grid(row=7, column=1, **padding)
-    self.quantity_input.grid(row=7, column=2, **padding)
-
-    self.weight_label.grid(row=7, column=3)
-    self.manual_weight_checkbox.grid(row=8, column=3)
-    self.weight_input.grid(row=7, column=4)
-
-    self.print_button.grid(row=10, column=2, columnspan=3, pady=20)
-    self.author.grid(row=11, column=4, **padding)
-    self.author.bind("<Button-1>", lambda o: self.author_callback())
+    self.serial_com_port_menu = ctk.CTkOptionMenu(self.master, values=["COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7"], command=self.serial_port_callback).grid(row=0, column=4, **PADDING)
+    self.manual_weight_checkbox = ctk.CTkCheckBox(self.master, text="Inserir Peso Manualmente", onvalue="on", offvalue="off", variable=self.manual_weight_var, command=self.manual_weight_callback).grid(row=8, column=3)
 
   def author_callback(self):
     web.open_new("https://www.linkedin.com/in/rafaeros/")
