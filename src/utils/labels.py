@@ -32,6 +32,7 @@ LABELS_FOLDER = TMP_FOLDER / "labels"
 LABELS_FOLDER.mkdir(exist_ok=True, parents=True)
 
 FONTS_PATH = BASE_DIR / "src" / "assets" / "fonts"
+LOGO_PATH = BASE_DIR / "src" / "assets" / "img" / "logo.png"
 
 # Standard Logistic Format (Approx 100mm x 150mm)
 LABEL_W_PT, LABEL_H_PT = 428, 283
@@ -43,18 +44,25 @@ PT_TO_PX = DPI / 72.0
 
 # --- Font Registration ---
 try:
-    pdfmetrics.registerFont(TTFont("ConsolasRegular", FONTS_PATH / "Consolas-Regular.ttf"))
-    pdfmetrics.registerFont(TTFont("FiraCodeRegular", FONTS_PATH / "FiraCode-Regular.ttf"))
+    pdfmetrics.registerFont(
+        TTFont("ConsolasRegular", FONTS_PATH / "Consolas-Regular.ttf")
+    )
+    pdfmetrics.registerFont(
+        TTFont("FiraCodeRegular", FONTS_PATH / "FiraCode-Regular.ttf")
+    )
     pdfmetrics.registerFont(TTFont("FiraCodeBold", FONTS_PATH / "FiraCode-Bold.ttf"))
     pdfmetrics.registerFont(TTFont("YugoSemiBold", FONTS_PATH / "Yugo-SemiBold.ttc"))
     pdfmetrics.registerFont(TTFont("YugoSemiLight", FONTS_PATH / "Yugo-SemiLight.ttc"))
-    pdfmetrics.registerFont(TTFont("LucidaConsoleRegular", FONTS_PATH / "LucidaConsole-Regular.ttf"))
+    pdfmetrics.registerFont(
+        TTFont("LucidaConsoleRegular", FONTS_PATH / "LucidaConsole-Regular.ttf")
+    )
     pdfmetrics.registerFont(TTFont("DubaiBold", FONTS_PATH / "Dubai-Bold.ttf"))
 except Exception as e:
     logging.warning("Could not load some ReportLab fonts: %s", e)
 
 
 # --- Helper Functions ---
+
 
 def get_pil_font(font_name: str, size_pt: float) -> ImageFont.FreeTypeFont:
     """Loads a TrueType font for Pillow (PNG) rendering."""
@@ -66,12 +74,15 @@ def get_pil_font(font_name: str, size_pt: float) -> ImageFont.FreeTypeFont:
         "YugoSemiBold": "Yugo-SemiBold.ttc",
         "YugoSemiLight": "Yugo-SemiLight.ttc",
         "LucidaConsoleRegular": "LucidaConsole-Regular.ttf",
-        "DubaiBold": "Dubai-Bold.ttf"
+        "DubaiBold": "Dubai-Bold.ttf",
     }
     try:
-        return ImageFont.truetype(str(FONTS_PATH / mappings.get(font_name, "Arial.ttf")), size_px)
+        return ImageFont.truetype(
+            str(FONTS_PATH / mappings.get(font_name, "Arial.ttf")), size_px
+        )
     except IOError:
         return ImageFont.load_default()
+
 
 def _draw_pdf_qr(c: Canvas, qr_data: str, x: float, y: float, size: float) -> None:
     """Renders a QR code onto a ReportLab Canvas."""
@@ -114,7 +125,7 @@ class ShippingLabelGenerator:
         """Generates a multi-page PDF document."""
         is_mwm = self.ordem.material_code.startswith("MWM")
         size = (MWM_W_MM * mm, MWM_H_MM * mm) if is_mwm else (LABEL_W_PT, LABEL_H_PT)
-        
+
         output_path = LABELS_FOLDER / f"shipping_{self.ordem.code}{self.file_extension}"
         pdf = Canvas(str(output_path), pagesize=size)
 
@@ -124,7 +135,7 @@ class ShippingLabelGenerator:
             else:
                 self._draw_normal_pdf(pdf)
             pdf.showPage()
-            
+
         pdf.save()
         return True, "", [str(output_path)]
 
@@ -135,41 +146,80 @@ class ShippingLabelGenerator:
         """
         qty_per_box = self.ordem.quantity / self.ordem.box_count
         pdf.setLineWidth(2)
+
+        # --- Company Header (above date) ---
+        logo_x = 10 * mm  # 10mm left margin
+        logo_w = 40 * mm  # 40mm width
+        logo_h = 15 * mm  # 15mm height
+        logo_y = 234  # Position above the date line (fits within existing space)
+
+        try:
+            pdf.drawImage(
+                str(LOGO_PATH),
+                logo_x,
+                logo_y,
+                width=logo_w,
+                height=logo_h,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+        except Exception as e:
+            logging.warning("Could not draw logo on PDF: %s", e)
+
+        # Company info text block (to the right of the logo, centered)
+        text_block_left = logo_x + logo_w + 5 * mm
+        page_right = LABEL_W_PT - 20 * mm  # 20mm right margin
+        text_center_x = text_block_left + (page_right - text_block_left) / 2
+
+        pdf.setFont("FiraCodeBold", 7)
+        pdf.drawCentredString(text_center_x, logo_y + logo_h - 6, "LANX CABLES TDA.")
+        pdf.setFont("FiraCodeRegular", 5.5)
+        pdf.drawCentredString(
+            text_center_x,
+            logo_y + logo_h - 15,
+            "Av. Arthur Thomas, 1795  Sabará, Londrina - PR.",
+        )
+        pdf.drawCentredString(
+            text_center_x, logo_y + logo_h - 23, "CEP: 86065-000 (43) 3032-4292"
+        )
+        pdf.drawCentredString(text_center_x, logo_y + logo_h - 31, "lanxcables.com.br")
+
+        # --- Date ---
         pdf.setFont("FiraCodeBold", 12)
         pdf.drawString(10, 222, f"DATA: {self.today_date.strftime('%d/%m/%Y')}")
-        pdf.rect(6, 0, 418, 215, stroke=1, fill=0)
+        pdf.rect(11, 0, 413, 215, stroke=1, fill=0)
 
         # Horizontal separators
-        pdf.line(6, 160, 424, 160) # Below recipient
-        pdf.line(6, 95, 424, 95)   # Above description/QR
-        
+        pdf.line(11, 160, 424, 160)  # Below recipient
+        pdf.line(11, 95, 424, 95)  # Above description/QR
+
         # Vertical separators
-        pdf.line(200, 160, 200, 0) # Middle divider
-        pdf.line(305, 160, 305, 0) # Right divider
+        pdf.line(200, 160, 200, 0)  # Middle divider
+        pdf.line(305, 160, 305, 0)  # Right divider
 
         # --- Recipient Block ---
         pdf.setFont("FiraCodeRegular", 9)
-        pdf.drawString(10, 198, "DESTINATÁRIO:")
-        
+        pdf.drawString(15, 198, "DESTINATÁRIO:")
+
         c_style = getSampleStyleSheet()["Normal"].clone("Dest")
         c_style.fontName = "FiraCodeBold"
         c_style.fontSize = 12
         c_style.leading = 14
-        
+
         p_client = Paragraph(self.ordem.client, c_style)
-        w_c, h_c = p_client.wrapOn(pdf, 395, 30)
-        p_client.drawOn(pdf, 10, 196 - h_c)
+        w_c, h_c = p_client.wrapOn(pdf, 390, 30)
+        p_client.drawOn(pdf, 15, 196 - h_c)
 
         # Material ID
         pdf.setFont("FiraCodeRegular", 10)
-        pdf.drawString(10, 145, "CÓDIGO MATERIAL:")
+        pdf.drawString(15, 145, "CÓDIGO MATERIAL:")
         pdf.setFont("FiraCodeBold", 16)
-        pdf.drawString(10, 127, self.ordem.material_code)
+        pdf.drawString(15, 127, self.ordem.material_code)
 
         if self.ordem.client_code:
             label_y = 110
             pdf.setFont("FiraCodeRegular", 9)
-            pdf.drawString(10, label_y, "CÓD. CLIENTE:")
+            pdf.drawString(15, label_y, "CÓD. CLIENTE:")
 
             cc_style = getSampleStyleSheet()["Normal"].clone("ClientCode")
             cc_style.fontName = "FiraCodeBold"
@@ -179,7 +229,7 @@ class ShippingLabelGenerator:
             p_cc = Paragraph(self.ordem.client_code, cc_style)
             w_cc, h_cc = p_cc.wrapOn(pdf, 110, 35)
 
-            p_cc.drawOn(pdf, 85, (label_y + 11) - h_cc)
+            p_cc.drawOn(pdf, 90, (label_y + 11) - h_cc)
 
         # Quantity
         pdf.setFont("FiraCodeRegular", 10)
@@ -195,32 +245,32 @@ class ShippingLabelGenerator:
 
         # Description
         pdf.setFont("FiraCodeRegular", 10)
-        pdf.drawString(10, 82, "DESCRIÇÃO:")
-        
+        pdf.drawString(15, 82, "DESCRIÇÃO:")
+
         d_style = getSampleStyleSheet()["Normal"].clone("Desc")
         d_style.fontName = "FiraCodeRegular"
         d_style.fontSize = 10
         d_style.leading = 11
-        
+
         p_desc = Paragraph(self.ordem.description, d_style)
         w_d, h_d = p_desc.wrapOn(pdf, 185, 60)
-        p_desc.drawOn(pdf, 10, 78 - h_d)
+        p_desc.drawOn(pdf, 15, 78 - h_d)
 
         # QR Code centered
         qr_data = f"{self.ordem.code};{self.ordem.material_code};{int(qty_per_box)}"
         qr_size = 100
         _draw_pdf_qr(pdf, qr_data, 203, 2, qr_size)
-        
+
         pdf.setFont("FiraCodeRegular", 6)
         pdf.drawCentredString(252, 3, "VERIFICAR CONTEÚDO")
 
         # Instructions / Logistic Icons
         pdf.setFont("FiraCodeRegular", 8)
         pdf.drawCentredString(365, 82, "INSTRUÇÕES:")
-        
+
         self._draw_vector_fragile(pdf, 325, 38)
         self._draw_vector_up(pdf, 375, 38)
-        
+
         pdf.setFont("FiraCodeBold", 7)
         pdf.drawCentredString(342, 28, "FRÁGIL")
         pdf.drawCentredString(392, 28, "P/ CIMA")
@@ -228,24 +278,24 @@ class ShippingLabelGenerator:
     def _draw_vector_fragile(self, pdf: Canvas, x: float, y: float) -> None:
         """Renders the fragile (glass) icon natively in vectors."""
         pdf.setLineWidth(1.5)
-        pdf.rect(x, y, 35, 35) 
-        pdf.line(x+8, y+28, x+27, y+28)
-        pdf.line(x+8, y+28, x+17.5, y+15)
-        pdf.line(x+27, y+28, x+17.5, y+15)
-        pdf.line(x+17.5, y+15, x+17.5, y+6)
-        pdf.line(x+11, y+6, x+24, y+6)
+        pdf.rect(x, y, 35, 35)
+        pdf.line(x + 8, y + 28, x + 27, y + 28)
+        pdf.line(x + 8, y + 28, x + 17.5, y + 15)
+        pdf.line(x + 27, y + 28, x + 17.5, y + 15)
+        pdf.line(x + 17.5, y + 15, x + 17.5, y + 6)
+        pdf.line(x + 11, y + 6, x + 24, y + 6)
 
     def _draw_vector_up(self, pdf: Canvas, x: float, y: float) -> None:
         """Renders the this-side-up (arrows) icon natively in vectors."""
         pdf.setLineWidth(1.5)
-        pdf.rect(x, y, 35, 35) 
-        pdf.line(x+6, y+6, x+29, y+6) 
-        pdf.line(x+13, y+6, x+13, y+26)
-        pdf.line(x+9, y+20, x+13, y+28)
-        pdf.line(x+17, y+20, x+13, y+28)
-        pdf.line(x+22, y+6, x+22, y+26)
-        pdf.line(x+18, y+20, x+22, y+28)
-        pdf.line(x+26, y+20, x+22, y+28)
+        pdf.rect(x, y, 35, 35)
+        pdf.line(x + 6, y + 6, x + 29, y + 6)
+        pdf.line(x + 13, y + 6, x + 13, y + 26)
+        pdf.line(x + 9, y + 20, x + 13, y + 28)
+        pdf.line(x + 17, y + 20, x + 13, y + 28)
+        pdf.line(x + 22, y + 6, x + 22, y + 26)
+        pdf.line(x + 18, y + 20, x + 22, y + 28)
+        pdf.line(x + 26, y + 20, x + 22, y + 28)
 
     def _draw_mwm_pdf(self, pdf: Canvas, index: int) -> None:
         """Renders the specialized MWM label format."""
@@ -261,16 +311,16 @@ class ShippingLabelGenerator:
         pdf.setFont("YugoSemiBold", 9)
         pdf.drawString(mwm_margin, 69 * mm, "MWM MOTORES E GERADORES")
         pdf.drawString(87 * mm, 69 * mm, "V.2.3.4")
-        
+
         pdf.setFont("LucidaConsoleRegular", 10)
         pdf.drawString(8 * mm, 66 * mm, "Part:")
         pdf.drawString(8 * mm, 40 * mm, "Qty:")
         pdf.drawString(8 * mm, 28.2 * mm, "Lot:")
         pdf.drawString(8 * mm, 15.5 * mm, "ID:")
-        
+
         pdf.setFont("LucidaConsoleRegular", 8)
         pdf.drawString(8 * mm, 43 * mm, "Supplier:15175")
-        
+
         pdf.setFont("YugoSemiBold", 10)
         pdf.drawString(72 * mm, 43.5 * mm, "Date:")
         pdf.setFont("YugoSemiBold", 6)
@@ -278,14 +328,14 @@ class ShippingLabelGenerator:
 
         pdf.setFont("YugoSemiLight", 8)
         pdf.drawString(81.2 * mm, 42.8 * mm, self.today_date.strftime("%d/%m/%Y"))
-        
+
         pdf.setFont("ConsolasRegular", 27)
         pdf.drawString(internal_margin, 65 * mm, self.ordem.client_code)
-        
+
         qty_str = f"{qty_per_box:.0f}"
         pdf.setFont("ConsolasRegular", 22.9)
         pdf.drawString(75 * mm, 39 * mm, qty_str)
-        
+
         qty_width = pdf.stringWidth(qty_str, "ConsolasRegular", 22.9)
         pdf.setFont("DubaiBold", 12.5)
         pdf.drawString(75 * mm + qty_width + 2 * mm, 35.2 * mm, "PCs")
@@ -299,13 +349,17 @@ class ShippingLabelGenerator:
             {"val": self.ordem.client_code, "y": 48 * mm},
             {"val": qty_str, "y": 34 * mm},
             {"val": str(self.ordem.code), "y": 20.3 * mm},
-            {"val": id_str, "y": 7 * mm}
+            {"val": id_str, "y": 7 * mm},
         ]
-        
+
         for bc in barcodes:
             if bc["val"]:
                 barcode = code39.Standard39(
-                    bc["val"], barWidth=0.25 * mm, barHeight=8 * mm, ratio=2.0, checksum=False
+                    bc["val"],
+                    barWidth=0.25 * mm,
+                    barHeight=8 * mm,
+                    ratio=2.0,
+                    checksum=False,
                 )
                 barcode.drawOn(pdf, 15 * mm, bc["y"])
 
@@ -318,7 +372,7 @@ class ShippingLabelGenerator:
         is_mwm = self.ordem.material_code.startswith("MWM")
         w_px = int(MWM_W_MM * MM_TO_PX) if is_mwm else int(LABEL_W_PT * PT_TO_PX)
         h_px = int(MWM_H_MM * MM_TO_PX) if is_mwm else int(LABEL_H_PT * PT_TO_PX)
-        
+
         paths = []
         for index in range(1, self.ordem.box_count + 1):
             img = Image.new("RGB", (w_px, h_px), "white")
@@ -328,26 +382,31 @@ class ShippingLabelGenerator:
                 self._draw_mwm_png(draw, img, index)
             else:
                 self._draw_normal_png(draw, img)
-            
+
             # Rotates 180 deg to feed correctly into standard Linux thermal setups
-            img = img.transpose(Image.Transpose.ROTATE_180)
-            
+            # img = img.transpose(Image.Transpose.ROTATE_180)
+
             output_path = LABELS_FOLDER / f"shipping_{self.ordem.code}_{index:03d}.png"
             img.save(output_path)
             paths.append(str(output_path))
-            
+
         return True, "", paths
 
     def _draw_normal_png(self, draw: ImageDraw.Draw, img: Image) -> None:
         """Renders the standard logistic grid layout via Pillow."""
         qty_per_box = self.ordem.quantity / self.ordem.box_count
 
-        def pt(val): return int(val * PT_TO_PX)
-        def y_inv(y_val): return int((LABEL_H_PT - y_val) * PT_TO_PX)
-        
+        def pt(val):
+            return int(val * PT_TO_PX)
+
+        def y_inv(y_val):
+            return int((LABEL_H_PT - y_val) * PT_TO_PX)
+
         def draw_txt(x_pt, y_pt, text, font_name, size, anchor="ls"):
             font = get_pil_font(font_name, size)
-            draw.text((pt(x_pt), y_inv(y_pt)), text, font=font, fill="black", anchor=anchor)
+            draw.text(
+                (pt(x_pt), y_inv(y_pt)), text, font=font, fill="black", anchor=anchor
+            )
 
         def wrap_text(text, max_w_pt, font_name, size_pt):
             font = get_pil_font(font_name, size_pt)
@@ -363,41 +422,107 @@ class ShippingLabelGenerator:
             lines.append(current_line.strip())
             return lines
 
+        # --- Company Header (above date) ---
+        logo_x_mm = 10  # 10mm left margin
+        logo_w_mm = 40  # 40mm width
+        logo_h_mm = 15  # 15mm height
+        logo_y_pt = 234  # Position above the date line (fits within existing space)
+
+        # Convert mm to pt for positioning
+        logo_x_pt = logo_x_mm * mm
+        logo_w_pt = logo_w_mm * mm
+        logo_h_pt = logo_h_mm * mm
+
+        try:
+            logo_img = Image.open(str(LOGO_PATH)).convert("RGBA")
+            logo_resized = logo_img.resize(
+                (pt(logo_w_pt), pt(logo_h_pt)), Image.LANCZOS
+            )
+            img.paste(
+                logo_resized,
+                (pt(logo_x_pt), y_inv(logo_y_pt + logo_h_pt)),
+                mask=logo_resized,
+            )
+        except Exception as e:
+            logging.warning("Could not draw logo on PNG: %s", e)
+
+        # Company info text block (to the right of the logo, centered)
+        text_block_left_pt = logo_x_pt + logo_w_pt + 5 * mm
+        page_right_pt = LABEL_W_PT - 20 * mm  # 20mm right margin
+        text_center_pt = text_block_left_pt + (page_right_pt - text_block_left_pt) / 2
+
+        draw_txt(
+            text_center_pt,
+            logo_y_pt + logo_h_pt - 6,
+            "LANX CABLES TDA.",
+            "FiraCodeBold",
+            8,
+            anchor="ms",
+        )
+        draw_txt(
+            text_center_pt,
+            logo_y_pt + logo_h_pt - 15,
+            "Av. Arthur Thomas, 1795  Sabará, Londrina - PR.",
+            "FiraCodeRegular",
+            8,
+            anchor="ms",
+        )
+        draw_txt(
+            text_center_pt,
+            logo_y_pt + logo_h_pt - 23,
+            "CEP: 86065-000 (43) 3032-4292",
+            "FiraCodeRegular",
+            8,
+            anchor="ms",
+        )
+        draw_txt(
+            text_center_pt,
+            logo_y_pt + logo_h_pt - 31,
+            "lanxcables.com.br",
+            "FiraCodeRegular",
+            8,
+            anchor="ms",
+        )
+
         # Header Date
-        draw_txt(10, 222, f"DATA: {self.today_date.strftime('%d/%m/%Y')}", "FiraCodeBold", 12)
+        draw_txt(
+            20, 222, f"DATA: {self.today_date.strftime('%d/%m/%Y')}", "FiraCodeBold", 12
+        )
 
         # Border
-        draw.rectangle([pt(5), y_inv(215), pt(415), y_inv(5)], outline="black", width=pt(2))
+        draw.rectangle(
+            [pt(10), y_inv(215), pt(415), y_inv(5)], outline="black", width=pt(2)
+        )
 
         # Grid Lines (Aligned perfectly)
-        draw.line([pt(5), y_inv(175), pt(415), y_inv(175)], fill="black", width=pt(2))
-        draw.line([pt(5), y_inv(100), pt(415), y_inv(100)], fill="black", width=pt(2))
-        
+        draw.line([pt(10), y_inv(175), pt(415), y_inv(175)], fill="black", width=pt(2))
+        draw.line([pt(10), y_inv(100), pt(415), y_inv(100)], fill="black", width=pt(2))
+
         draw.line([pt(200), y_inv(175), pt(200), y_inv(5)], fill="black", width=pt(2))
         draw.line([pt(305), y_inv(175), pt(305), y_inv(5)], fill="black", width=pt(2))
 
         # Destinatário
-        draw_txt(10, 203, "DESTINATÁRIO:", "FiraCodeRegular", 9)
+        draw_txt(15, 203, "DESTINATÁRIO:", "FiraCodeRegular", 9)
         client_lines = wrap_text(self.ordem.client, 400, "FiraCodeBold", 12)
         y_client = 190
         for line in client_lines[:2]:
-            draw_txt(10, y_client, line, "FiraCodeBold", 12)
+            draw_txt(15, y_client, line, "FiraCodeBold", 12)
             y_client -= 14
 
         # Material Details
-        draw_txt(10, 158, "CÓDIGO MATERIAL:", "FiraCodeRegular", 10)
-        draw_txt(10, 140, self.ordem.material_code, "FiraCodeBold", 16)
-        
+        draw_txt(15, 158, "CÓDIGO MATERIAL:", "FiraCodeRegular", 10)
+        draw_txt(15, 140, self.ordem.material_code, "FiraCodeBold", 16)
+
         if self.ordem.client_code:
-            draw_txt(10, 115, "CÓD. CLIENTE: ", "FiraCodeRegular", 9)
-            draw_txt(85, 115, self.ordem.client_code, "FiraCodeBold", 11)
-        
+            draw_txt(15, 115, "CÓD. CLIENTE: ", "FiraCodeRegular", 9)
+            draw_txt(90, 115, self.ordem.client_code, "FiraCodeBold", 11)
+
         # Description
-        draw_txt(10, 85, "DESCRIÇÃO:", "FiraCodeRegular", 10)
+        draw_txt(15, 85, "DESCRIÇÃO:", "FiraCodeRegular", 10)
         desc_lines = wrap_text(self.ordem.description, 185, "FiraCodeRegular", 10)
         y_desc = 70
         for line in desc_lines[:5]:
-            draw_txt(10, y_desc, line, "FiraCodeRegular", 10)
+            draw_txt(15, y_desc, line, "FiraCodeRegular", 10)
             y_desc -= 12
 
         # Quantity
@@ -412,13 +537,13 @@ class ShippingLabelGenerator:
         qr_data = f"{self.ordem.code};{self.ordem.material_code};{int(qty_per_box)}"
         qr_size_pt = 75
         qr_x_pt = 215
-        
+
         qr_obj = qrcode.QRCode(version=1, box_size=10, border=0)
         qr_obj.add_data(qr_data)
         qr_obj.make(fit=True)
         q_img = qr_obj.make_image(fill_color="black", back_color="white")
         q_img = q_img.resize((pt(qr_size_pt), pt(qr_size_pt)), Image.NEAREST)
-        
+
         img.paste(q_img, (pt(qr_x_pt), y_inv(15 + qr_size_pt)))
         draw_txt(252, 8, "VERIFICAR CONTEÚDO", "FiraCodeRegular", 6, anchor="ms")
 
@@ -426,38 +551,97 @@ class ShippingLabelGenerator:
         draw_txt(360, 85, "INSTRUÇÕES:", "FiraCodeRegular", 8, anchor="ms")
         self._draw_vector_fragile_pil(draw, 315, 45)
         self._draw_vector_up_pil(draw, 365, 45)
-        
+
         draw_txt(332, 35, "FRÁGIL", "FiraCodeBold", 7, anchor="ms")
         draw_txt(382, 35, "P/ CIMA", "FiraCodeBold", 7, anchor="ms")
 
-
-    def _draw_vector_fragile_pil(self, draw: ImageDraw.Draw, x: float, y: float) -> None:
+    def _draw_vector_fragile_pil(
+        self, draw: ImageDraw.Draw, x: float, y: float
+    ) -> None:
         """Renders the fragile (glass) icon natively in vectors for PIL."""
-        def pt(val): return int(val * PT_TO_PX)
-        def y_inv(y_val): return int((LABEL_H_PT - y_val) * PT_TO_PX)
+
+        def pt(val):
+            return int(val * PT_TO_PX)
+
+        def y_inv(y_val):
+            return int((LABEL_H_PT - y_val) * PT_TO_PX)
+
         lw = pt(1.5)
-        draw.rectangle([pt(x), y_inv(y+35), pt(x+35), y_inv(y)], outline="black", width=lw)
-        draw.line([pt(x+8), y_inv(y+28), pt(x+27), y_inv(y+28)], fill="black", width=lw)
-        draw.line([pt(x+8), y_inv(y+28), pt(x+17.5), y_inv(y+15)], fill="black", width=lw)
-        draw.line([pt(x+27), y_inv(y+28), pt(x+17.5), y_inv(y+15)], fill="black", width=lw)
-        draw.line([pt(x+17.5), y_inv(y+15), pt(x+17.5), y_inv(y+6)], fill="black", width=lw)
-        draw.line([pt(x+11), y_inv(y+6), pt(x+24), y_inv(y+6)], fill="black", width=lw)
+        draw.rectangle(
+            [pt(x), y_inv(y + 35), pt(x + 35), y_inv(y)], outline="black", width=lw
+        )
+        draw.line(
+            [pt(x + 8), y_inv(y + 28), pt(x + 27), y_inv(y + 28)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 8), y_inv(y + 28), pt(x + 17.5), y_inv(y + 15)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 27), y_inv(y + 28), pt(x + 17.5), y_inv(y + 15)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 17.5), y_inv(y + 15), pt(x + 17.5), y_inv(y + 6)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 11), y_inv(y + 6), pt(x + 24), y_inv(y + 6)], fill="black", width=lw
+        )
 
     def _draw_vector_up_pil(self, draw: ImageDraw.Draw, x: float, y: float) -> None:
         """Renders the this-side-up (arrows) icon natively in vectors for PIL."""
-        def pt(val): return int(val * PT_TO_PX)
-        def y_inv(y_val): return int((LABEL_H_PT - y_val) * PT_TO_PX)
+
+        def pt(val):
+            return int(val * PT_TO_PX)
+
+        def y_inv(y_val):
+            return int((LABEL_H_PT - y_val) * PT_TO_PX)
+
         lw = pt(1.5)
-        draw.rectangle([pt(x), y_inv(y+35), pt(x+35), y_inv(y)], outline="black", width=lw)
-        draw.line([pt(x+6), y_inv(y+6), pt(x+29), y_inv(y+6)], fill="black", width=lw)
-        
-        draw.line([pt(x+13), y_inv(y+6), pt(x+13), y_inv(y+26)], fill="black", width=lw)
-        draw.line([pt(x+9), y_inv(y+20), pt(x+13), y_inv(y+28)], fill="black", width=lw)
-        draw.line([pt(x+17), y_inv(y+20), pt(x+13), y_inv(y+28)], fill="black", width=lw)
-        
-        draw.line([pt(x+22), y_inv(y+6), pt(x+22), y_inv(y+26)], fill="black", width=lw)
-        draw.line([pt(x+18), y_inv(y+20), pt(x+22), y_inv(y+28)], fill="black", width=lw)
-        draw.line([pt(x+26), y_inv(y+20), pt(x+22), y_inv(y+28)], fill="black", width=lw)
+        draw.rectangle(
+            [pt(x), y_inv(y + 35), pt(x + 35), y_inv(y)], outline="black", width=lw
+        )
+        draw.line(
+            [pt(x + 6), y_inv(y + 6), pt(x + 29), y_inv(y + 6)], fill="black", width=lw
+        )
+
+        draw.line(
+            [pt(x + 13), y_inv(y + 6), pt(x + 13), y_inv(y + 26)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 9), y_inv(y + 20), pt(x + 13), y_inv(y + 28)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 17), y_inv(y + 20), pt(x + 13), y_inv(y + 28)],
+            fill="black",
+            width=lw,
+        )
+
+        draw.line(
+            [pt(x + 22), y_inv(y + 6), pt(x + 22), y_inv(y + 26)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 18), y_inv(y + 20), pt(x + 22), y_inv(y + 28)],
+            fill="black",
+            width=lw,
+        )
+        draw.line(
+            [pt(x + 26), y_inv(y + 20), pt(x + 22), y_inv(y + 28)],
+            fill="black",
+            width=lw,
+        )
 
     def _draw_mwm_png(self, draw: ImageDraw.Draw, img: Image, index: int) -> None:
         """Renders the specialized MWM label format for PIL."""
@@ -468,30 +652,49 @@ class ShippingLabelGenerator:
             logging.error("python-barcode is required to generate MWM PNG labels.")
             return
 
-        def mm2px(mm_val): return int(mm_val * MM_TO_PX)
-        
+        def mm2px(mm_val):
+            return int(mm_val * MM_TO_PX)
+
         mwm_margin = mm2px(7.5)
         internal_margin = mm2px(21.5)
 
-        draw.rectangle([mwm_margin, mm2px(MWM_H_MM - 69.5), mm2px(97.5), mm2px(MWM_H_MM - 5.5)], outline="black", width=2)
-        
+        draw.rectangle(
+            [mwm_margin, mm2px(MWM_H_MM - 69.5), mm2px(97.5), mm2px(MWM_H_MM - 5.5)],
+            outline="black",
+            width=2,
+        )
+
         for y_mm in [43.5, 32.5, 19.5]:
             y_px = mm2px(MWM_H_MM - y_mm)
             draw.line([mwm_margin, y_px, mm2px(105 - 7.5), y_px], fill="black", width=2)
 
         def draw_txt(x_mm, y_mm, text, font_name="FiraCodeRegular", size_pt=10):
             font = get_pil_font(font_name, size_pt)
-            draw.text((mm2px(x_mm), mm2px(MWM_H_MM - y_mm) - size_pt), text, font=font, fill="black")
+            draw.text(
+                (mm2px(x_mm), mm2px(MWM_H_MM - y_mm) - size_pt),
+                text,
+                font=font,
+                fill="black",
+            )
 
         draw_txt(7.5, 69, "MWM MOTORES E GERADORES", "YugoSemiBold", 9)
         draw_txt(8, 66, "Part:", "LucidaConsoleRegular", 10)
         draw_txt(21.5, 65, self.ordem.client_code, "ConsolasRegular", 27)
 
         def draw_code39(val, x_mm, y_mm):
-            if not val: return
-            options = {'module_width': 0.15, 'module_height': 8.0, 'quiet_zone': 1.0, 'font_size': 0, 'write_text': False}
+            if not val:
+                return
+            options = {
+                "module_width": 0.15,
+                "module_height": 8.0,
+                "quiet_zone": 1.0,
+                "font_size": 0,
+                "write_text": False,
+            }
             try:
-                code_img = Code39(str(val), writer=ImageWriter(), add_checksum=False).render(options)
+                code_img = Code39(
+                    str(val), writer=ImageWriter(), add_checksum=False
+                ).render(options)
                 code_img = code_img.resize((int(code_img.width * 0.8), mm2px(8)))
                 img.paste(code_img, (mm2px(x_mm), mm2px(MWM_H_MM - y_mm - 8)))
             except Exception:
